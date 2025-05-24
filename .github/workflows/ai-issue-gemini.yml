@@ -18,28 +18,27 @@ jobs:
       - name: Generate Gemini response
         run: |
           echo "Sending request to Gemini..."
-
           JSON=$(cat <<EOF
-{
-  "contents": [
-    {
-      "parts": [
-        {
-          "text": "You are a helpful GitHub assistant. Please analyze the following GitHub issue and provide actionable suggestions for how to investigate or fix it.\n\nTitle: ${TITLE}\n\nBody:\n${BODY}"
-        }
-      ]
-    }
-  ]
-}
-EOF
-)
-
+          {
+            "contents": [
+              {
+                "parts": [
+                  {
+                    "text": "You are a helpful GitHub assistant. Please analyze the following GitHub issue and provide actionable suggestions for how to investigate or fix it.\n\nTitle: ${TITLE}\n\nBody:\n${BODY}"
+                  }
+                ]
+              }
+            ]
+          }
+          EOF
+          )
+          
           echo "$JSON" > payload.json
-
+          
           RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${{ secrets.GEMINI_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d @payload.json)
-
+          
           COMMENT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text')
           echo "$COMMENT" > reply.txt
 
