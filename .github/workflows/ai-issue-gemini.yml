@@ -12,8 +12,8 @@ jobs:
       - name: Extract issue content
         id: extract
         run: |
-          echo "TITLE=$(jq -r .issue.title "$GITHUB_EVENT_PATH")" >> $GITHUB_ENV
-          echo "BODY=$(jq -r .issue.body "$GITHUB_EVENT_PATH")" >> $GITHUB_ENV
+          echo 'TITLE=$(jq -r .issue.title "$GITHUB_EVENT_PATH")' >> $GITHUB_ENV
+          echo 'BODY=$(jq -r .issue.body "$GITHUB_EVENT_PATH")' >> $GITHUB_ENV
 
       - name: Generate Gemini response
         run: |
