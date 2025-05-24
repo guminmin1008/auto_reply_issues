@@ -3,6 +3,7 @@ name: Gemini Issue Responder
 on:
   issues:
     types: [opened]
+  workflow_dispatch:
 
 jobs:
   respond:
