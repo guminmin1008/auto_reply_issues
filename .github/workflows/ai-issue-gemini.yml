@@ -57,9 +57,9 @@ jobs:
           head -c 500 payload.json
           echo -e "\n..."
           
-          # Gemini APIにリクエスト送信
+          # Gemini APIにリクエスト送信（正しいモデル名を使用）
           RESPONSE=$(curl -s -X POST \
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${{ secrets.GEMINI_API_KEY }}" \
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${{ secrets.GEMINI_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d @payload.json)
           
