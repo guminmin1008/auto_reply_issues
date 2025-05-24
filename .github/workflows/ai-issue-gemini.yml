@@ -8,42 +8,84 @@ on:
 jobs:
   respond:
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
     steps:
       - name: Extract issue content
         id: extract
         run: |
-          echo 'TITLE=$(jq -r .issue.title "$GITHUB_EVENT_PATH")' >> $GITHUB_ENV
-          echo 'BODY=$(jq -r .issue.body "$GITHUB_EVENT_PATH")' >> $GITHUB_ENV
+          # 実際に環境変数を評価して設定
+          TITLE=$(jq -r '.issue.title // "No title"' "$GITHUB_EVENT_PATH")
+          BODY=$(jq -r '.issue.body // "No body"' "$GITHUB_EVENT_PATH")
+          
+          # 環境変数に保存（マルチライン対応）
+          {
+            echo "TITLE=$TITLE"
+            echo "BODY<<EOF"
+            echo "$BODY"
+            echo "EOF"
+          } >> $GITHUB_ENV
+          
+          echo "Extracted title: $TITLE"
+          echo "Issue body length: ${#BODY} characters"
 
       - name: Generate Gemini response
         run: |
           echo "Sending request to Gemini..."
-          JSON=$(cat <<EOF
-          {
-            "contents": [
-              {
-                "parts": [
-                  {
-                    "text": "You are a helpful GitHub assistant. Please analyze the following GitHub issue and provide actionable suggestions for how to investigate or fix it.\n\nTitle: ${TITLE}\n\nBody:\n${BODY}"
-                  }
-                ]
-              }
-            ]
-          }
-          EOF
-          )
+          echo "Title: $TITLE"
+          echo "Body preview: ${BODY:0:100}..."
           
-          echo "$JSON" > payload.json
+          # JSONペイロードを作成（jqを使用して安全にエスケープ）
+          jq -n \
+            --arg title "$TITLE" \
+            --arg body "$BODY" \
+            '{
+              contents: [
+                {
+                  parts: [
+                    {
+                      text: "You are a helpful GitHub assistant. Please analyze the following GitHub issue and provide actionable suggestions for how to investigate or fix it.\n\nTitle: \($title)\n\nBody:\n\($body)"
+                    }
+                  ]
+                }
+              ]
+            }' > payload.json
           
-          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${{ secrets.GEMINI_API_KEY }}" \
+          # デバッグ用：ペイロードの先頭部分を表示
+          echo "Request payload (first 500 chars):"
+          head -c 500 payload.json
+          echo -e "\n..."
+          
+          # Gemini APIにリクエスト送信
+          RESPONSE=$(curl -s -X POST \
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${{ secrets.GEMINI_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d @payload.json)
           
-          COMMENT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text')
+          # レスポンスのデバッグ
+          echo "API Response status and first 200 chars:"
+          echo "$RESPONSE" | head -c 200
+          echo -e "\n..."
+          
+          # エラーチェック
+          if echo "$RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
+            echo "API Error detected:"
+            echo "$RESPONSE" | jq '.error'
+            echo "Using fallback response."
+            COMMENT="Sorry, I encountered an error while generating a response. Please check the issue manually."
+          else
+            # レスポンスからコメントを抽出
+            COMMENT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // "Sorry, I could not generate a response."')
+          fi
+          
           echo "$COMMENT" > reply.txt
+          
+          echo "Generated comment length: ${#COMMENT} characters"
 
       - name: Comment on issue
         uses: peter-evans/create-or-update-comment@v3
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           issue-number: ${{ github.event.issue.number }}
           body-path: reply.txt
